@@ -18,9 +18,7 @@ from sklearn.metrics import auc, precision_recall_curve
 from faformer.model.predictor import BindSitePredictor
 from faformer.data.protein_complex_dataset import BindSiteDataset
 from faformer.data.protein_complex_dataloader import BindSitePredDataLoader
-from utils.utils import (
-    set_random_seed, 
-)
+from faformer.utils.utils import set_random_seed
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
@@ -109,10 +107,9 @@ def test(model, device, loader, pos_weight):
     return {"loss": loss, "precision": precision, "recall": recall, "f1": f1, "pr_auc": pr_auc}
 
 
-def read_data(args, data_dict, dataset_name, protein_emb_path, cache_path, shuffle=True):
-    prot_esm_dict = pickle.load(open(protein_emb_path, 'rb'))
-    dataset = BindSiteDataset(dataset_name, data_dict, cache_path, prot_esm_dict, save_hetero=True)
-    return BindSitePredDataLoader(dataset, batch_size=args.batch_size, shuffle=shuffle, drop_last=True)
+def read_data(args, data_dict, dataset_name, protein_emb_path, shuffle=True):
+    dataset = BindSiteDataset(dataset_name, data_dict, None, protein_emb_path, save_hetero=False)
+    return BindSitePredDataLoader(dataset, batch_size=args.batch_size, shuffle=shuffle, drop_last=False)
 
 
 def run(seed, args):
@@ -121,9 +118,9 @@ def run(seed, args):
 
     s = time()
     train_dict, val_dict, test_dict = pickle.load(open(args.data_path, 'rb'))
-    train_loader = read_data(args, train_dict, args.complex_type, args.train_esm_path, args.cache_path["train"], shuffle=True)
-    val_loader = read_data(args, val_dict, args.complex_type, args.val_esm_path, args.cache_path["val"], shuffle=False)
-    test_loader = read_data(args, test_dict, args.complex_type, args.test_esm_path, args.cache_path["test"], shuffle=False)
+    train_loader = read_data(args, train_dict, args.complex_type, args.train_esm_path, shuffle=True)
+    val_loader = read_data(args, val_dict, args.complex_type, args.val_esm_path, shuffle=False)
+    test_loader = read_data(args, test_dict, args.complex_type, args.test_esm_path, shuffle=False)
     logging.info(f"Data loading time: {time() - s:.4f}s")
 
     model = BindSitePredictor(args).to(device)
@@ -198,35 +195,24 @@ def main(args):
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path, exist_ok=True)
 
+    if not os.path.exists(os.path.join(args.dataset_root, 'embeddings')):
+        os.makedirs(os.path.join(args.dataset_root, 'embeddings'), exist_ok=True)
+
     if args.dataset == "prot_rna":
         args.complex_type = "prot_rna"
 
-        args.train_esm_path = os.path.join(args.dataset_root, f"split/prot_rna/esm_dict.pkl")
-        args.train_fm_path = os.path.join(args.dataset_root, f"split/prot_rna/fm_dict.pkl")
-        args.val_esm_path = os.path.join(args.dataset_root, f"split/prot_rna/esm_dict.pkl")
-        args.val_fm_path = os.path.join(args.dataset_root, f"split/prot_rna/fm_dict.pkl")
-        args.test_esm_path = os.path.join(args.dataset_root, f"split/prot_rna/esm_dict.pkl")
-        args.test_fm_path = os.path.join(args.dataset_root, f"split/prot_rna/fm_dict.pkl")
-
-        args.data_path = os.path.join(args.dataset_root, f"split/prot_rna/dataset.pkl")
-        args.cache_path = {"train": os.path.join(args.dataset_root, f"split/prot_rna/train_hetero_bindsite.pkl"),
-                           "val": os.path.join(args.dataset_root, f"split/prot_rna/val_hetero_bindsite.pkl"),
-                           "test": os.path.join(args.dataset_root, f"split/prot_rna/test_hetero_bindsite.pkl")}
-
+        args.train_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/train_esm_dict.pkl")
+        args.val_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/val_esm_dict.pkl")
+        args.test_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/test_esm_dict.pkl")
+        args.data_path = os.path.join(args.dataset_root, f"prot_complex/prot_rna.pkl")
+        
     elif args.dataset == "prot_dna":
         args.complex_type = "prot_dna"
 
-        args.train_esm_path = os.path.join(args.dataset_root, f"split/prot_dna/esm_dict.pkl")
-        args.train_fm_path = None
-        args.val_esm_path = os.path.join(args.dataset_root, f"split/prot_dna/esm_dict.pkl")
-        args.val_fm_path = None
-        args.test_esm_path = os.path.join(args.dataset_root, f"split/prot_dna/esm_dict.pkl")
-        args.test_fm_path = None
-
-        args.data_path = os.path.join(args.dataset_root, f"split/prot_dna/dataset.pkl")
-        args.cache_path = {"train": os.path.join(args.dataset_root, f"split/prot_dna/train_hetero_bindsite.pkl"),
-                           "val": os.path.join(args.dataset_root, f"split/prot_dna/val_hetero_bindsite.pkl"),
-                           "test": os.path.join(args.dataset_root, f"split/prot_dna/test_hetero_bindsite.pkl")}
+        args.train_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_dna/train_esm_dict.pkl")
+        args.val_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_dna/val_esm_dict.pkl")
+        args.test_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_dna/test_esm_dict.pkl")
+        args.data_path = os.path.join(args.dataset_root, f"prot_complex/prot_dna.pkl")
 
     """record"""
     if args.use_wandb:
@@ -259,12 +245,12 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seeds', type=int, nargs="+", default=[0,1,2])
+    parser.add_argument('--seeds', type=int, nargs="+", default=[0,2,4])
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument("--use_wandb", action="store_true", default=False)
     parser.add_argument("--save_checkpoint", action="store_true", default=False)
-    parser.add_argument('--dataset_root', type=str, default="/home/username/Anonymous_FAFormer/faformer_dataset/")
-    parser.add_argument('--save_dir', type=str, default="/home/username/Anonymous_FAFormer/faformer_dataset/checkpoints/")
+    parser.add_argument('--dataset_root', type=str, default="/home/tinglin/Frame-Averaging-Transformer/dataset/")
+    parser.add_argument('--save_dir', type=str, default="/home/tinglin/Frame-Averaging-Transformer/dataset/checkpoints/")
     parser.add_argument('--dataset', type=str, default='prot_rna', help="prot_rna, prot_dna")
 
     """training parameter"""
@@ -287,9 +273,9 @@ if __name__ == "__main__":
     parser.add_argument('--drop_ratio', type=float, default=0.2)
     parser.add_argument('--attn_drop_ratio', type=float, default=0.2)
     parser.add_argument('--top_k_neighbors', type=int, default=30)
-    parser.add_argument('--top_k_neighbors_partner', type=int, default=30)
     parser.add_argument('--embedding_grad_frac', type=float, default=1)
     parser.add_argument('--max_dist', type=float, default=1e5)
+    parser.add_argument('--act', type=str, default='swiglu')
     parser.add_argument("--edge_residue", default=True)
 
     args = parser.parse_args()

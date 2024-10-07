@@ -29,7 +29,6 @@ def get_geo_encoder(args, input_dim, max_seq_len=800):
         raise ValueError("Invalid geo framework: {}".format(args.model))
 
 
-# predict the binding site with mol1 & mol2 sequence + individual structure
 class ContactMapPredictor(nn.Module):
     def __init__(self, args):
         super(ContactMapPredictor, self).__init__()
@@ -88,8 +87,8 @@ class ContactMapPredictor(nn.Module):
 
         decenter_X_mol1, decenter_X_mol2 = self._decenter(X_mol1, mol1_mask), self._decenter(X_mol2, mol2_mask)  # [B, N, 3], decenter the structure to avoid label leakage
 
-        h_mol2 = self.mol2_encoder(h_mol2, decenter_X_mol2[:, :, 1], mol2_mask)
-        h_mol1 = self.mol1_encoder(h_mol1, decenter_X_mol1[:, :, 1], mol1_mask)
+        h_mol2 = self.mol2_encoder(h_mol2, decenter_X_mol2[:, :, 1], ~mol2_mask.bool())
+        h_mol1 = self.mol1_encoder(h_mol1, decenter_X_mol1[:, :, 1], ~mol1_mask.bool())
         if isinstance(h_mol1, tuple):
             h_mol2, h_mol1 = h_mol2[0], h_mol1[0]
 
@@ -107,7 +106,6 @@ class ContactMapPredictor(nn.Module):
         return pred_binding_site, y_contact, mask
 
 
-# predict the binding site on the given protein
 class BindSitePredictor(nn.Module):
     def __init__(self, args):
         super(BindSitePredictor, self).__init__()
@@ -134,7 +132,6 @@ class BindSitePredictor(nn.Module):
         mask = (X_ca.sum(dim=-1) != 0).unsqueeze(-1)  # [B, N, 1]
         center = (X_ca * mask).sum(dim=1) / mask.sum(dim=1)  # [B, 3]
         X_res = X - center.unsqueeze(1).unsqueeze(1) * mask.unsqueeze(-1)  # [B, N, 14, 3]
-        # X_res[mask.unsqueeze(dim=-1).expand(-1, -1, 14, 3) == 0] = 0
         return X_res
 
     def forward(self, mol, contact_map):
@@ -145,7 +142,7 @@ class BindSitePredictor(nn.Module):
         B, N_mol, mol_mask = S_mol.shape[0], S_mol.shape[1], (S_mol != 0).float()
         decenter_X_mol = self._decenter(X_mol)  # [B, N, 3], decenter the structure to avoid label leakage
 
-        h_mol = self.encoder(h_mol.float(), decenter_X_mol[:, :, 1], mol_mask)
+        h_mol = self.encoder(h_mol.float(), decenter_X_mol[:, :, 1], ~mol_mask.bool())
         if isinstance(h_mol, tuple):
             h_mol = h_mol[0]
 
@@ -202,9 +199,9 @@ class AptamerScreener(nn.Module):
         decenter_X_mol = self._decenter(X_mol, mol_mask)  # [B, N, 3], decenter the structure to avoid label leakage
 
         if kind == "prot":
-            h_mol = self.prot_encoder(h_mol, decenter_X_mol[:, :, 1], mol_mask)
+            h_mol = self.prot_encoder(h_mol, decenter_X_mol[:, :, 1], ~mol_mask.bool())
         else:
-            h_mol = self.partner_encoder(h_mol, decenter_X_mol[:, :, 1], mol_mask)
+            h_mol = self.partner_encoder(h_mol, decenter_X_mol[:, :, 1], ~mol_mask.bool())
         
         if isinstance(h_mol, tuple):
             h_mol = h_mol[0]
@@ -234,8 +231,8 @@ class AptamerScreener(nn.Module):
 
         decenter_X_mol1, decenter_X_mol2 = self._decenter(X_mol1, mol1_mask), self._decenter(X_mol2, mol2_mask)  # [B, N, 3], decenter the structure to avoid label leakage
 
-        h_mol1 = self.partner_encoder(h_mol1, decenter_X_mol1[:, :, 1], mol1_mask)
-        h_mol2 = self.prot_encoder(h_mol2, decenter_X_mol2[:, :, 1], mol2_mask)
+        h_mol1 = self.partner_encoder(h_mol1, decenter_X_mol1[:, :, 1], ~mol1_mask.bool())
+        h_mol2 = self.prot_encoder(h_mol2, decenter_X_mol2[:, :, 1], ~mol2_mask.bool())
         if isinstance(h_mol1, tuple):
             h_mol2, h_mol1 = h_mol2[0], h_mol1[0]
 

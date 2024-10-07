@@ -105,12 +105,8 @@ class MLPAttnEdgeAggregation(FrameAveraging):
             nn.Linear(d_edge_model, d_edge_model * 2),
         )
 
-        self.mlp_attn = MLPWrapper(
-            self.d_head, self.d_head, 1, activation, nn.LayerNorm, True, proj_drop
-        )
-        self.edge_attn = MLPWrapper(
-            self.d_edge_head, self.d_edge_head, 1, activation, nn.LayerNorm, True, proj_drop
-        )
+        self.mlp_attn = nn.Linear(self.d_head, 1, bias=False)
+        self.edge_attn = nn.Linear(self.d_edge_head, 1, bias=False)
         self.W_output = MLPWrapper(
             d_model + d_edge_model, d_model, d_model, activation, nn.LayerNorm, True, proj_drop
         )
@@ -201,10 +197,6 @@ class FAFormerEncoderLayer(nn.Module):
 
     def forward(self, token_embs, geo_feats, edge_feats, neighbor_indices, batch_idx, neighbor_masks):
         # neighbor_indices: [B, N, N_neighbor], neighbor_masks: [B, N, N_neighbor]
-
-        if edge_feats is None:
-            edge_feats = self.edge_module(token_embs, geo_feats, neighbor_indices, neighbor_masks)
-
         token_embs, geo_feats = self.self_attn(token_embs, geo_feats, edge_feats, neighbor_indices, batch_idx, neighbor_masks)
         
         edge_feats = edge_feats + self.edge_module(token_embs, geo_feats, neighbor_indices, neighbor_masks)
@@ -218,6 +210,7 @@ class FAFormer(nn.Module):
         super(FAFormer, self).__init__()
 
         self.input_transform = nn.Linear(config.d_input, config.d_model)
+        self.edge_module = EdgeModule(config.d_model, config.d_edge_model, config.proj_drop, config.activation)
         self.layers = nn.ModuleList([FAFormerEncoderLayer(
             config.d_model, config.d_edge_model, config.n_heads, config.proj_drop, config.attn_drop, config.activation) for _ in range(config.n_layers)]
         )
@@ -264,7 +257,7 @@ class FAFormer(nn.Module):
         """generate graph"""
         nearest_indices, neighbor_mask = self._build_graph(coords, batch_idx, int(min(self.n_neighbors, N)), self.valid_radius)
 
-        edge_feats = None
+        edge_feats = self.edge_module(token_embs, coords, nearest_indices, neighbor_mask)
         for i, layer in enumerate(self.layers):
             token_embs, coords, edge_feats = layer(token_embs, coords, edge_feats, nearest_indices, batch_idx, neighbor_mask)
 
@@ -276,7 +269,7 @@ class FAFormer(nn.Module):
 
 if __name__ == "__main__":
 
-    from faformer.model.config import FAFormerConfig
+    from faformer.model.encoder.config import FAFormerConfig
 
     model = FAFormer(
         FAFormerConfig(

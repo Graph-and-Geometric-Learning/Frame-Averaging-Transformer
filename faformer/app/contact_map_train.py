@@ -11,16 +11,14 @@ from time import time
 from copy import deepcopy
 
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
+import torch.nn.functional as F
 from sklearn.metrics import auc, precision_recall_curve
 
 from faformer.model.predictor import ContactMapPredictor
 from faformer.data.protein_complex_dataset import ContactPredDataset
 from faformer.data.protein_complex_dataloader import ContactPredDataLoader
-from utils.utils import (
-    set_random_seed, 
-)
+from faformer.utils.utils import set_random_seed
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
@@ -177,7 +175,7 @@ def run(seed, args):
 def main(args):
     checkpoint_folder = "ContactPred" \
                     + "-" + str(args.dataset) \
-                    + "-" + str(args.seed) \
+                    + "-" + str(args.seeds) \
                     + "-" + str(args.model) \
                     + "-" + str(args.lr) \
                     + "-" + str(args.batch_size) \
@@ -192,50 +190,56 @@ def main(args):
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path, exist_ok=True)
 
+    if not os.path.exists(os.path.join(args.dataset_root, 'embeddings')):
+        os.makedirs(os.path.join(args.dataset_root, 'embeddings'), exist_ok=True)
+
+    if not os.path.exists(os.path.join(args.dataset_root, 'cache')):
+        os.makedirs(os.path.join(args.dataset_root, 'cache'), exist_ok=True)
+ 
     if args.dataset == "prot_rna":
         args.complex_type = "prot_rna"
 
-        args.train_esm_path = os.path.join(args.dataset_root, f"split/prot_rna/esm_dict.pkl")
-        args.train_fm_path = os.path.join(args.dataset_root, f"split/prot_rna/fm_dict.pkl")
-        args.val_esm_path = os.path.join(args.dataset_root, f"split/prot_rna/esm_dict.pkl")
-        args.val_fm_path = os.path.join(args.dataset_root, f"split/prot_rna/fm_dict.pkl")
-        args.test_esm_path = os.path.join(args.dataset_root, f"split/prot_rna/esm_dict.pkl")
-        args.test_fm_path = os.path.join(args.dataset_root, f"split/prot_rna/fm_dict.pkl")
+        args.train_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/train_esm_dict.pkl")
+        args.train_fm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/train_fm_dict.pkl")
+        args.val_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/val_esm_dict.pkl")
+        args.val_fm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/val_fm_dict.pkl")
+        args.test_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/test_esm_dict.pkl")
+        args.test_fm_path = os.path.join(args.dataset_root, f"embeddings/prot_rna/test_fm_dict.pkl")
 
-        args.data_path = os.path.join(args.dataset_root, f"split/prot_rna/dataset.pkl")
-        args.cache_path = {"train": os.path.join(args.dataset_root, f"split/prot_rna/train_hetero.pkl"),
-                           "val": os.path.join(args.dataset_root, f"split/prot_rna/val_hetero.pkl"),
-                           "test": os.path.join(args.dataset_root, f"split/prot_rna/test_hetero.pkl")}
+        args.data_path = os.path.join(args.dataset_root, f"prot_complex/prot_rna.pkl")
+        args.cache_path = {"train": os.path.join(args.dataset_root, f"cache/prot_rna_train_hetero.pkl"),
+                           "val": os.path.join(args.dataset_root, f"cache/prot_rna_val_hetero.pkl"),
+                           "test": os.path.join(args.dataset_root, f"cache/prot_rna_test_hetero.pkl")}
 
     elif args.dataset == "prot_dna":
         args.complex_type = "prot_dna"
 
-        args.train_esm_path = os.path.join(args.dataset_root, f"split/prot_dna/esm_dict.pkl")
+        args.train_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_dna/train_esm_dict.pkl")
         args.train_fm_path = None
-        args.val_esm_path = os.path.join(args.dataset_root, f"split/prot_dna/esm_dict.pkl")
+        args.val_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_dna/val_esm_dict.pkl")
         args.val_fm_path = None
-        args.test_esm_path = os.path.join(args.dataset_root, f"split/prot_dna/esm_dict.pkl")
+        args.test_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_dna/test_esm_dict.pkl")
         args.test_fm_path = None
 
-        args.data_path = os.path.join(args.dataset_root, f"split/prot_dna/dataset.pkl")
-        args.cache_path = {"train": os.path.join(args.dataset_root, f"split/prot_dna/train_hetero.pkl"),
-                           "val": os.path.join(args.dataset_root, f"split/prot_dna/val_hetero.pkl"),
-                           "test": os.path.join(args.dataset_root, f"split/prot_dna/test_hetero.pkl")}
+        args.data_path = os.path.join(args.dataset_root, f"prot_complex/prot_dna.pkl")
+        args.cache_path = {"train": os.path.join(args.dataset_root, f"cache/prot_dna_hetero.pkl"),
+                           "val": os.path.join(args.dataset_root, f"cache/prot_dna_val_hetero.pkl"),
+                           "test": os.path.join(args.dataset_root, f"cache/prot_dna_test_hetero.pkl")}
 
     elif args.dataset in "prot_prot":
         args.complex_type = "prot_prot"
 
-        args.train_esm_path = os.path.join(args.dataset_root, f"split/dips/esm_dict.pkl")
+        args.train_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_prot/train_esm_dict.pkl")
         args.train_fm_path = None
-        args.val_esm_path = os.path.join(args.dataset_root, f"split/dips/esm_dict.pkl")
+        args.val_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_prot/val_esm_dict.pkl")
         args.val_fm_path = None
-        args.test_esm_path = os.path.join(args.dataset_root, f"split/dips/esm_dict.pkl")
+        args.test_esm_path = os.path.join(args.dataset_root, f"embeddings/prot_prot/test_esm_dict.pkl")
         args.test_fm_path = None
 
-        args.data_path = os.path.join(args.dataset_root, f"split/dips/dataset.pkl")
-        args.cache_path = {"train": os.path.join(args.dataset_root, f"split/dips/train_hetero.pkl"),
-                           "val": os.path.join(args.dataset_root, f"split/dips/val_hetero.pkl"),
-                           "test": os.path.join(args.dataset_root, f"split/dips/test_hetero.pkl")}
+        args.data_path = os.path.join(args.dataset_root, f"prot_complex/prot_prot.pkl")
+        args.cache_path = {"train": os.path.join(args.dataset_root, f"cache/prot_prot_train_hetero.pkl"),
+                           "val": os.path.join(args.dataset_root, f"cache/prot_prot_val_hetero.pkl"),
+                           "test": os.path.join(args.dataset_root, f"cache/prot_prot_test_hetero.pkl")}
 
     """record"""
     if args.use_wandb:
@@ -274,7 +278,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_checkpoint", action="store_true", default=False)
     parser.add_argument('--dataset_root', type=str, default="/home/tinglin/Frame-Averaging-Transformer/dataset/")
     parser.add_argument('--save_dir', type=str, default="/home/tinglin/Frame-Averaging-Transformer/dataset/checkpoints/")
-    parser.add_argument('--dataset', type=str, default='prot_rna', help="prot_rna, prot_dna, prot_prot")
+    parser.add_argument('--dataset', type=str, default='prot_prot', help="prot_rna, prot_dna, prot_prot")
 
     """training parameter"""
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -296,9 +300,9 @@ if __name__ == "__main__":
     parser.add_argument('--drop_ratio', type=float, default=0.2)
     parser.add_argument('--attn_drop_ratio', type=float, default=0.2)
     parser.add_argument('--top_k_neighbors', type=int, default=30)
-    parser.add_argument('--top_k_neighbors_partner', type=int, default=30)
     parser.add_argument('--embedding_grad_frac', type=float, default=1)
     parser.add_argument('--max_dist', type=float, default=1e5)
+    parser.add_argument('--act', type=str, default='swiglu')
     parser.add_argument("--edge_residue", default=True)
 
     args = parser.parse_args()

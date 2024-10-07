@@ -27,7 +27,7 @@ class ContactPredDataset(Dataset):
             if dataset_name == "prot_rna":
                 rna_embedding_dict = self.inference_rna_embedding(complex_list, rna_emb_path, device=device)
 
-        if not os.path.exists(hetero_cache_path):
+        if hetero_cache_path is None or not os.path.exists(hetero_cache_path):
             logging.info("Preprocessing data...")
             self.complex_graphs = self._preprocess(self.data, hetero_cache_path, prot_embedding_dict, rna_embedding_dict, save_hetero=save_hetero)
         else:
@@ -45,6 +45,8 @@ class ContactPredDataset(Dataset):
             embedding_dict = pickle.load(open(embedding_path, 'rb'))
             return embedding_dict
         else:
+            os.makedirs(os.path.dirname(embedding_path), exist_ok=True)
+
             esm_input = [(f"description", d['protein_seq']) for d in data_list]
             if include_partner:
                 esm_input += [(f"description", d['partner_seq']) for d in data_list]
@@ -58,6 +60,8 @@ class ContactPredDataset(Dataset):
             embedding_dict = pickle.load(open(embedding_path, 'rb'))
             return embedding_dict
         else:
+            os.makedirs(os.path.dirname(embedding_path), exist_ok=True)
+
             fm_input = [(f"description", d['partner_seq']) for d in data_list]
             embedding_dict = fm_inference_embedding(fm_input, device=device)
             with open(embedding_path, 'wb') as f:
@@ -126,19 +130,36 @@ class ContactPredDataset(Dataset):
 
 
 class BindSiteDataset(Dataset):
-    def __init__(self, dataset_name, complex_list, hetero_cache_path, protein_esm_embeddings=None, save_hetero=True):
+    def __init__(self, dataset_name, complex_list, hetero_cache_path, protein_esm_path=None, save_hetero=True, device=0):
         self.data = complex_list
         self.dataset_name = dataset_name
 
-        if not os.path.exists(hetero_cache_path):
+        prot_embedding_dict = self.inference_prot_embedding(complex_list, protein_esm_path, device=device)
+
+        if hetero_cache_path is None or not os.path.exists(hetero_cache_path):
             logging.info("Preprocessing data...")
-            self.complex_graphs = self._preprocess(self.data, hetero_cache_path, protein_esm_embeddings, save_hetero=save_hetero)
+            self.complex_graphs = self._preprocess(self.data, hetero_cache_path, prot_embedding_dict, save_hetero=save_hetero)
         else:
             self.complex_graphs = pickle.load(open(hetero_cache_path, 'rb'))
 
         self.complex_graphs = [g for g in self.complex_graphs if g['protein'].seq.shape[0] < 800]
         self.complex_graphs = [g for g in self.complex_graphs if g['partner'].atom_pos.shape[0] < 500]
         print(f"Total {len(self.complex_graphs)} complexes")
+
+    def inference_prot_embedding(self, data_list, embedding_path, include_partner=False, device=0):
+        if os.path.exists(embedding_path):
+            embedding_dict = pickle.load(open(embedding_path, 'rb'))
+            return embedding_dict
+        else:
+            os.makedirs(os.path.dirname(embedding_path), exist_ok=True)
+
+            esm_input = [(f"description", d['protein_seq']) for d in data_list]
+            if include_partner:
+                esm_input += [(f"description", d['partner_seq']) for d in data_list]
+            embedding_dict = esm_inference_embedding(esm_input, device=device)
+            with open(embedding_path, 'wb') as f:
+                pickle.dump(embedding_dict, f)
+            return embedding_dict
 
     def _preprocess(self, data_list, save_path, esm_embeddings=None, save_hetero=True):
         """convert data to HeteroData"""
@@ -189,7 +210,7 @@ class AptamerDataset(Dataset):
         prot_embedding_dict = self.inference_prot_embedding([protein], protein_esm_path, device=device)
         rna_embedding_dict = self.inference_rna_embedding(aptamer_list, rna_emb_path, device=device)
 
-        if not os.path.exists(hetero_cache_path):
+        if hetero_cache_path is None or not os.path.exists(hetero_cache_path):
             logging.info("Preprocessing data...")
             self.protein, self.aptamer = self._preprocess(protein, aptamer_list, hetero_cache_path, prot_embedding_dict, rna_embedding_dict, save_hetero=save_hetero)
         else:
@@ -197,12 +218,12 @@ class AptamerDataset(Dataset):
 
         print(f"Total {len(self.aptamer)} aptamer")
 
-    def inference_prot_embedding(self, protein_dict, embedding_path, include_partner=False, device=0):
+    def inference_prot_embedding(self, data_list, embedding_path, include_partner=False, device=0):
         if os.path.exists(embedding_path):
             embedding_dict = pickle.load(open(embedding_path, 'rb'))
             return embedding_dict
         else:
-            esm_input = [(f"description", protein_dict['protein_seq']) for d in data_list]
+            esm_input = [(f"description", d['protein_seq']) for d in data_list]
             if include_partner:
                 esm_input += [(f"description", d['partner_seq']) for d in data_list]
             embedding_dict = esm_inference_embedding(esm_input, device=device)

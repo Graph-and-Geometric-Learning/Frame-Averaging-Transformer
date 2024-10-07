@@ -18,9 +18,7 @@ from sklearn.metrics import auc, precision_recall_curve
 from faformer.model.predictor import AptamerScreener
 from faformer.data.protein_complex_dataset import ContactPredDataset, AptamerDataset
 from faformer.data.protein_complex_dataloader import ContactPredDataLoader, AptamerDataLoader
-from utils.utils import (
-    set_random_seed, 
-)
+from faformer.utils.utils import set_random_seed
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
@@ -134,7 +132,7 @@ def test(model, device, loader, threshold, topk_list=[10, 20, 50], largest=False
 
 def read_data(data_dict, batch_size, dataset_name, protein_emb_path, rna_emb_path, cache_path, device=0, aptamer_prot=None, train=True):
     if train:
-        dataset = ContactPredDataset(dataset_name, data_dict, cache_path, protein_emb_path, rna_emb_path, save_hetero=True, device=device)
+        dataset = ContactPredDataset(dataset_name, data_dict, cache_path, protein_emb_path, rna_emb_path, save_hetero=False, device=device)
         return ContactPredDataLoader(dataset, batch_size=batch_size, shuffle=True)
     else:
         dataset = AptamerDataset(aptamer_prot, data_dict, cache_path, protein_emb_path, rna_emb_path, save_hetero=True, device=device)
@@ -147,10 +145,10 @@ def run(seed, args):
 
     s = time()
     train_dict = pickle.load(open(args.data_path["train"], 'rb'))
-    train_loader = read_data(train_dict, args.batch_size, args.complex_type, args.esm_path, args.train_fm_path, args.cache_path["train"], device=device)
+    train_loader = read_data(train_dict, args.batch_size, args.complex_type, args.train_esm_path, args.train_fm_path, None, device=device)
     protein, val_dict, test_dict = pickle.load(open(args.data_path["eval"], 'rb'))
-    val_loader = read_data(val_dict, args.eval_batch_size, args.complex_type, args.esm_path, args.val_fm_path, args.cache_path["val"], device=device, aptamer_prot=protein, train=False)
-    test_loader = read_data(test_dict, args.eval_batch_size, args.complex_type, args.esm_path, args.test_fm_path, args.cache_path["test"], device=device, aptamer_prot=protein, train=False)
+    val_loader = read_data(val_dict, args.eval_batch_size, args.complex_type, args.eval_esm_path, args.val_fm_path, args.cache_path["val"], device=device, aptamer_prot=protein, train=False)
+    test_loader = read_data(test_dict, args.eval_batch_size, args.complex_type, args.eval_esm_path, args.test_fm_path, args.cache_path["test"], device=device, aptamer_prot=protein, train=False)
     logging.info(f"Data loading time: {time() - s:.4f}s")
 
     model = AptamerScreener(args).to(device)
@@ -223,18 +221,20 @@ def main(args):
         os.makedirs(args.save_path, exist_ok=True)
 
     args.complex_type = "prot_rna"
-    args.esm_path = os.path.join(args.dataset_root, f"aptamer/esm/esm_dict.pkl")
-    args.train_fm_path = os.path.join(args.dataset_root, f"aptamer/esm/train_fm_dict.pkl")
-    args.val_fm_path = os.path.join(args.dataset_root, f"aptamer/esm/{args.dataset}_val_fm_dict.pkl")
-    args.test_fm_path = os.path.join(args.dataset_root, f"aptamer/esm/{args.dataset}_test_fm_dict.pkl")
+
+    args.train_esm_path = os.path.join(args.dataset_root, f"embeddings/aptamer/train_esm_dict.pkl")
+    args.eval_esm_path = os.path.join(args.dataset_root, f"embeddings/aptamer/{args.dataset}_esm_dict.pkl")
+
+    args.train_fm_path = os.path.join(args.dataset_root, f"embeddings/aptamer/train_fm_dict.pkl")
+    args.val_fm_path = os.path.join(args.dataset_root, f"embeddings/aptamer/{args.dataset}_val_fm_dict.pkl")
+    args.test_fm_path = os.path.join(args.dataset_root, f"embeddings/aptamer/{args.dataset}_test_fm_dict.pkl")
 
     args.data_path = {
-        "train": os.path.join(args.dataset_root, f"aptamer/processed/train.pkl"),
-        "eval": os.path.join(args.dataset_root, f"aptamer/processed/{args.dataset}_eval.pkl"),
+        "train": os.path.join(args.dataset_root, f"aptamer/train.pkl"),
+        "eval": os.path.join(args.dataset_root, f"aptamer/{args.dataset}_eval.pkl"),
     }
-    args.cache_path = {"train": os.path.join(args.dataset_root, f"aptamer/cache/train_hetero.pkl"),
-                       "val": os.path.join(args.dataset_root, f"aptamer/cache/{args.dataset}_val_hetero.pkl"),
-                       "test": os.path.join(args.dataset_root, f"aptamer/cache/{args.dataset}_test_hetero.pkl"),}
+    args.cache_path = {"val": os.path.join(args.dataset_root, f"cache/{args.dataset}_val_hetero.pkl"),
+                       "test": os.path.join(args.dataset_root, f"cache/{args.dataset}_test_hetero.pkl"),}
 
     threshold = {
                 "GFP": 10, "NELF": 5, "CHK2": 100, "UBLCP1": 200, "HNRNPC": -0.5
@@ -265,13 +265,11 @@ def main(args):
         val_metric, test_metric = run(args.seed, args)
         test_metric_list.append(test_metric)
 
-    mean_test_metric_list = [[] for _ in range(2)]
-    std_test_metric_list = [[] for _ in range(2)]
+    mean_test_metric_list = [[]]
+    std_test_metric_list = [[]]
     for k in range(len(test_metric_list[0]["precision"])):
         mean_test_metric_list[0].append(np.mean([test_metric["precision"][k] for test_metric in test_metric_list]))
         std_test_metric_list[0].append(np.std([test_metric["precision"][k] for test_metric in test_metric_list]))
-        mean_test_metric_list[1].append(np.mean([test_metric["recall"][k] for test_metric in test_metric_list]))
-        std_test_metric_list[1].append(np.std([test_metric["recall"][k] for test_metric in test_metric_list]))
 
     mean_test_metric_list.append(np.mean([test_metric["prauc"] for test_metric in test_metric_list]))
     std_test_metric_list.append(np.std([test_metric["prauc"] for test_metric in test_metric_list]))
@@ -288,9 +286,9 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument("--use_wandb", action="store_true", default=False)
     parser.add_argument("--save_checkpoint", action="store_true", default=False)
-    parser.add_argument('--dataset_root', type=str, default="/home/username/Anonymous_FAFormer/faformer_dataset/")
-    parser.add_argument('--save_dir', type=str, default="/home/username/Anonymous_FAFormer/faformer_dataset/checkpoints/")
-    parser.add_argument('--dataset', type=str, default='CHK2', help="GFP,HNRNPC,NELF,CHK2,UBLCP1")
+    parser.add_argument('--dataset_root', type=str, default="/home/tinglin/Frame-Averaging-Transformer/dataset/")
+    parser.add_argument('--save_dir', type=str, default="/home/tinglin/Frame-Averaging-Transformer/dataset/checkpoints/")
+    parser.add_argument('--dataset', type=str, default='GFP', help="GFP,HNRNPC,NELF,CHK2,UBLCP1")
 
     """training parameter"""
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -312,9 +310,9 @@ if __name__ == "__main__":
     parser.add_argument('--drop_ratio', type=float, default=0.2)
     parser.add_argument('--attn_drop_ratio', type=float, default=0.2)
     parser.add_argument('--top_k_neighbors', type=int, default=30)
-    parser.add_argument('--top_k_neighbors_partner', type=int, default=30)
     parser.add_argument('--embedding_grad_frac', type=float, default=1)
     parser.add_argument('--max_dist', type=float, default=1e5)
+    parser.add_argument('--act', type=str, default='swiglu')
     parser.add_argument("--edge_residue", default=True)
 
     args = parser.parse_args()

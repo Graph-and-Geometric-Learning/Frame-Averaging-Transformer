@@ -54,11 +54,11 @@ def get_activation(activation="gelu"):
     }[activation]
 
 
-def MLPWrapper(in_features, hidden_features, out_features, activation="gelu", norm_layer=None, bias=True, drop=0.):
+def MLPWrapper(in_features, hidden_features, out_features, activation="gelu", norm_layer=None, bias=True, drop=0., drop_last=True):
     if activation == "swiglu":
-        return SwiGLUMLP(in_features, hidden_features, out_features, norm_layer, bias, drop)
+        return SwiGLUMLP(in_features, hidden_features, out_features, norm_layer, bias, drop, drop_last)
     else:
-        return MLP(in_features, hidden_features, out_features, get_activation(activation), norm_layer, bias, drop)
+        return MLP(in_features, hidden_features, out_features, get_activation(activation), norm_layer, bias, drop, drop_last)
 
 
 class MLP(nn.Module):
@@ -71,6 +71,7 @@ class MLP(nn.Module):
         norm_layer=None,
         bias=True,
         drop=0.,
+        drop_last=True,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -81,7 +82,7 @@ class MLP(nn.Module):
         self.drop1 = nn.Dropout(drop)
         self.norm = norm_layer(hidden_features) if norm_layer is not None else nn.Identity()
         self.fc2 = nn.Linear(hidden_features, out_features, bias=bias)
-        self.drop2 = nn.Dropout(drop)
+        self.drop2 = nn.Dropout(drop) if drop_last else nn.Identity()
 
     def forward(self, x):
         x = self.fc1(x)
@@ -105,6 +106,7 @@ class SwiGLUMLP(nn.Module):
         norm_layer=None,
         bias=True,
         drop=0.,
+        drop_last=True,
     ):
         super().__init__()
 
@@ -117,7 +119,7 @@ class SwiGLUMLP(nn.Module):
         self.drop1 = nn.Dropout(drop)
         self.norm = norm_layer(hidden_features // 2) if norm_layer is not None else nn.Identity()
         self.fc2 = nn.Linear(hidden_features // 2, out_features, bias=bias)
-        self.drop2 = nn.Dropout(drop)
+        self.drop2 = nn.Dropout(drop) if drop_last else nn.Identity()
 
     def init_weights(self):
         # override init of fc1 w/ gate portion set to weight near zero, bias=1
