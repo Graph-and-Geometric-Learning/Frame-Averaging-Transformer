@@ -40,7 +40,7 @@ The code is organized as follows:
 
 ## Usage
 
-An quick example of using FAFormer to encode a point cloud is as follows:
+A quick example of using FAFormer to encode a point cloud is as follows:
 
 ```
 import torch
