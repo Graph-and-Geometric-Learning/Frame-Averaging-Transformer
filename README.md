@@ -6,7 +6,7 @@ This is our PyTorch implementation for the paper:
 
 ## Dataset Preparation
 
-Our datasets includes three protein complex datasets and five aptamer datasets. The description of dataset can be found in `dataset/prot_complex/README.md` and `dataset/aptamer/README.md` respectively. The dataset can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1GaRe87g2nwbJbkOwqFZr3h9SqIW8bz7V?usp=drive_link).
+Our datasets include three protein complex datasets and five aptamer datasets. The description of the dataset can be found in `dataset/prot_complex/README.md` and `dataset/aptamer/README.md` respectively. The dataset can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1GaRe87g2nwbJbkOwqFZr3h9SqIW8bz7V?usp=drive_link).
 
 
 ## Requirements
@@ -18,7 +18,7 @@ The code has been tested running under Python 3.10.14. The required packages are
 - rna-fm == 0.2.2
 - einops == 0.8.0
 
-Once you finished these installation, please run install the package by running:
+Once you have finished the installation, please install the package by running:
 ```
 pip install -e .
 ```
@@ -66,4 +66,17 @@ pad_mask = torch.tensor([[0, 0, 0, 0, 1], [0, 0, 0, 1, 1]]).bool()  # batch size
 features, coords = model(features, coords, pad_mask=pad_mask)
 print(features.shape)
 print(coords.shape)
+```
+
+## Reference
+
+If you find our work useful in your research or if you use parts of this code/dataset, please consider citing our paper:
+
+```
+@inproceedings{huang2024protein,
+  title={Protein-nucleic acid complex modeling with frame averaging transformer},
+  author={Huang, Tinglin and Song, Zhenqiao and Ying, Rex and Jin, Wengong},
+  booktitle={Advances in Neural Information Processing Systems},
+  year={2024}
+}
 ```
