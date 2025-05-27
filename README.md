@@ -42,7 +42,7 @@ The code is organized as follows:
 
 A quick example of using FAFormer to encode a point cloud is as follows:
 
-```
+```python
 import torch
 from faformer.model.encoder.transformer import FAFormer
 from faformer.model.encoder.config import FAFormerConfig
